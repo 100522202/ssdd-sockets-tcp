@@ -6,8 +6,134 @@
 #include <unistd.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <arpa/inet.h>
+#include <stdint.h>
+#include "claves.h"
 
 #define NUMBER_OF_PORTS 65535
+#define OP_EXIST 1 //Constante provisional para exist y provar que funcioona la logica del servidor
+
+
+//Funciones auxiliares para enviar y recibir mensajes correctamente
+//Envia num_bytes bytes
+int sendMessage(int socket_fd, const void *buffer, size_t num_bytes) {
+    //se inicializa a 0 el contador
+    size_t enviados = 0;
+    const char *puntero_datos = (const char *)buffer;
+
+    while (enviados < num_bytes) {
+        ssize_t enviados_ahora = write(
+            socket_fd, 
+            puntero_datos + enviados,
+            num_bytes - enviados
+        );
+
+        if (enviados_ahora < 0) {
+            //Error al enviar
+            return -1; 
+        }
+
+        if (enviados_ahora == 0){
+            //No se envió nada
+            return -1;
+        }
+
+        // Si se llega aquí es que se envió correctamente
+        enviados += (size_t)enviados_ahora;
+    }
+
+    //Se enviaron todos los bytes
+    return 0;
+}
+
+//Recibe exactamente num_bytes bytes
+int recvMessage(int socket_fd, void *buffer_destino, size_t num_bytes) {
+    size_t recibidos = 0;
+    char *puntero_buffer = (char *)buffer_destino;
+
+    while(recibidos < num_bytes) {
+        ssize_t recibidos_ahora = read(
+            socket_fd, 
+            puntero_buffer + recibidos,
+            num_bytes - recibidos
+        );
+
+        if (recibidos_ahora < 0) {
+            // error al recibir
+            return -1;   
+        }
+
+        if (recibidos_ahora == 0) {
+            // el otro extremo cerró la conexión antes de tiempo
+            return -1;   
+        }
+
+        // Si se llega aquí es que se recibió correctamente
+        recibidos += (size_t)recibidos_ahora;
+
+    }
+
+    //Se recibieron todos los bytes
+    return 0;
+}
+
+
+// Función auxiliar para procesar la operación exist
+int procesar_exist(int socket_especifico_fd) {
+    /* 1. Leer la longitud de la clave */
+    int32_t longitud_clave_red;
+
+    if (recvMessage(socket_especifico_fd, &longitud_clave_red, sizeof(longitud_clave_red)) < 0) {
+        perror("recvMessage longitud_clave_red");
+        return -1;
+    }
+
+    /* 2. Pasar la longitud de formato de red a formato de máquina */
+    int32_t longitud_clave = ntohl(longitud_clave_red);
+
+    printf("Longitud de clave recibida: %d\n", longitud_clave);
+
+    /* 3. Validar la longitud */
+    if (longitud_clave < 0 || longitud_clave > 255) {
+        int32_t resultado_error = htonl(-1);
+
+        if (sendMessage(socket_especifico_fd, &resultado_error, sizeof(resultado_error)) < 0) {
+            perror("sendMessage resultado_error longitud");
+            return -1;
+        }
+
+        return 0;
+    }
+
+    /* 4. Leer la clave */
+    char clave[256];
+
+    if (recvMessage(socket_especifico_fd, clave, (size_t)longitud_clave) < 0) {
+        perror("recvMessage clave");
+        return -1;
+    }
+
+    /* 5. Añadir fin de cadena para usarla como string de C */
+    clave[longitud_clave] = '\0';
+
+    printf("Clave recibida: %s\n", clave);
+
+    /* 6. Llamar a la lógica real */
+    int resultado_exist = exist(clave);
+
+    printf("Resultado de exist(\"%s\") = %d\n", clave, resultado_exist);
+
+    /* 7. Convertir el resultado a formato de red */
+    int32_t resultado_exist_red = htonl(resultado_exist);
+
+    /* 8. Enviar respuesta al cliente */
+    if (sendMessage(socket_especifico_fd, &resultado_exist_red, sizeof(resultado_exist_red)) < 0) {
+        perror("sendMessage resultado_exist_red");
+        return -1;
+    }
+
+    return 0;
+}
 
 int main(int argc, char * argv[]){
     
@@ -69,9 +195,74 @@ int main(int argc, char * argv[]){
     // Unir addr y fd
     if (bind(socket_servidor_fd, (struct sockaddr *)&socket_servidor_addr, sizeof(socket_servidor_addr)) < 0){
         perror("bind");
+        close(socket_servidor_fd);
         return -1;
     }
 
+    // poner el socket en escucha
+    if (listen(socket_servidor_fd, SOMAXCONN) < 0) {
+        perror("listen");
+        close(socket_servidor_fd);
+        return -1;
+    }
+
+    // Si se llega hasta aquí es que el servidor está escuchando
+    printf("Servidor escuchando en el puerto %ld...\n", puerto);
+
+    //Bucle principal del servidor
+    while (1){
+
+        struct sockaddr_in client_addr;
+        socklen_t client_len = sizeof(client_addr);
+        
+        //Socket nuevo para cada cliente
+        int socket_especifico_fd = accept(socket_servidor_fd, (struct sockaddr *)&client_addr,  &client_len);
+        //Si hay un fallo se lanza error y se continúa escuchando
+        if (socket_especifico_fd < 0){
+            perror("accept");
+            continue;
+        }
+
+        printf("Conexión aceptada con IP %s y puerto %d\n", 
+            inet_ntoa(client_addr.sin_addr),
+            ntohs(client_addr.sin_port));
+
+        // Leer el código de operación
+        unsigned char codigo_operacion;
+        
+        if (recvMessage(socket_especifico_fd, &codigo_operacion, sizeof(codigo_operacion)) < 0){
+            perror("recvMessage codigo_operacion");
+            //Cerrar el descriptor si hay un fallo
+            close(socket_especifico_fd);
+            continue;
+        }
+
+        //Si se llega aquí es que se ha recibido correctamente
+        printf("Código de operación recibido: %u\n", codigo_operacion);
+
+        // estamos probando solo con exist que esla mas facil y para ver si funciona esta logica se modificaria un poco para dependiendo 
+        //del codigo se ejecute una u otra pero demomento queremos probar todo
+        //TODO: aqui tienes todo pa que no se olvide
+
+        if (codigo_operacion != OP_EXIST) {
+            int32_t resultado_error = htonl(-1);
+
+            if (sendMessage(socket_especifico_fd, &resultado_error, sizeof(resultado_error)) < 0) {
+                perror("sendMessage resultado_error");
+            }
+
+            close(socket_especifico_fd);
+            continue;
+        }
+
+        /* Si llega aquí, la operación es EXIST */
+        if (procesar_exist(socket_especifico_fd) < 0) {
+            close(socket_especifico_fd);
+            continue;
+        }
+
+        close(socket_especifico_fd);
+    }
 
     return 0;
 }

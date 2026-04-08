@@ -9,74 +9,10 @@
 #include <arpa/inet.h>
 #include <stdint.h>
 #include "claves.h"
+#include "mensajes.h"
+
 
 #define NUMBER_OF_PORTS 65535
-#define OP_EXIST 1 //Constante provisional para exist y provar que funcioona la logica del servidor
-
-
-//Funciones auxiliares para enviar y recibir mensajes correctamente
-//Envia num_bytes bytes
-int sendMessage(int socket_fd, const void *buffer, size_t num_bytes) {
-    //se inicializa a 0 el contador
-    size_t enviados = 0;
-    const char *puntero_datos = (const char *)buffer;
-
-    while (enviados < num_bytes) {
-        ssize_t enviados_ahora = write(
-            socket_fd, 
-            puntero_datos + enviados,
-            num_bytes - enviados
-        );
-
-        if (enviados_ahora < 0) {
-            //Error al enviar
-            return -1; 
-        }
-
-        if (enviados_ahora == 0){
-            //No se envió nada
-            return -1;
-        }
-
-        // Si se llega aquí es que se envió correctamente
-        enviados += (size_t)enviados_ahora;
-    }
-
-    //Se enviaron todos los bytes
-    return 0;
-}
-
-//Recibe exactamente num_bytes bytes
-int recvMessage(int socket_fd, void *buffer_destino, size_t num_bytes) {
-    size_t recibidos = 0;
-    char *puntero_buffer = (char *)buffer_destino;
-
-    while(recibidos < num_bytes) {
-        ssize_t recibidos_ahora = read(
-            socket_fd, 
-            puntero_buffer + recibidos,
-            num_bytes - recibidos
-        );
-
-        if (recibidos_ahora < 0) {
-            // error al recibir
-            return -1;   
-        }
-
-        if (recibidos_ahora == 0) {
-            // el otro extremo cerró la conexión antes de tiempo
-            return -1;   
-        }
-
-        // Si se llega aquí es que se recibió correctamente
-        recibidos += (size_t)recibidos_ahora;
-
-    }
-
-    //Se recibieron todos los bytes
-    return 0;
-}
-
 
 // Función auxiliar para procesar la operación exist
 int procesar_exist(int socket_especifico_fd) {
@@ -181,7 +117,7 @@ int main(int argc, char * argv[]){
     // Rellenar los atributos
     socket_servidor_addr.sin_family = AF_INET;
     // Convertir host to network, 16 bits -> short (los datos viajarán por la red)
-    socket_servidor_addr.sin_port = htons(puerto);
+    socket_servidor_addr.sin_port = htons((uint16_t)puerto);
     socket_servidor_addr.sin_addr.s_addr = INADDR_ANY;
 
     // Crear descriptor del socket
@@ -239,10 +175,6 @@ int main(int argc, char * argv[]){
 
         //Si se llega aquí es que se ha recibido correctamente
         printf("Código de operación recibido: %u\n", codigo_operacion);
-
-        // estamos probando solo con exist que esla mas facil y para ver si funciona esta logica se modificaria un poco para dependiendo 
-        //del codigo se ejecute una u otra pero demomento queremos probar todo
-        //TODO: aqui tienes todo pa que no se olvide
 
         if (codigo_operacion != OP_EXIST) {
             int32_t resultado_error = htonl(-1);

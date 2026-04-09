@@ -154,7 +154,7 @@ int procesar_set(int socket_especifico_fd) {
     // 4. Leer N_value2
     int32_t N_value2_red;
 
-    if (recvMessage(socket_especifico_fd, &N_value2_red, sizeof(N_value2)) < 0) {
+    if (recvMessage(socket_especifico_fd, &N_value2_red, sizeof(N_value2_red)) < 0) {
         perror("recvMessage N_value2");
         return -1;
     }

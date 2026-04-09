@@ -3,6 +3,17 @@
 
 #include <stddef.h>
 
+// Definir códigos de las operaciones
+
+typedef enum {
+    OP_SET = 1,
+    OP_GET = 2,
+    OP_MODIFY = 3,
+    OP_DELETE = 4,
+    OP_EXIST = 5,
+    OP_DESTROY = 6
+} op_t;
+
 /* Se incluyen las dos funciones auxiliares relacionadas 
 con el envío/recepción de mensajes */
 

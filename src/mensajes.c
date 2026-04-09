@@ -2,9 +2,9 @@
 #include <unistd.h>
 #include <errno.h>
 
-//Envia num_bytes bytes
+// Envía num_bytes bytes
 int sendMessage(int socket_fd, const void *buffer, size_t num_bytes) {
-    //se inicializa a 0 el contador
+    // Se inicializa a 0 el contador
     size_t enviados = 0;
     const char *puntero_datos = (const char *)buffer;
 
@@ -16,12 +16,12 @@ int sendMessage(int socket_fd, const void *buffer, size_t num_bytes) {
         );
 
         if (enviados_ahora < 0) {
-            //Error al enviar
+            // Error al enviar
             return -1; 
         }
 
         if (enviados_ahora == 0){
-            //No se envió nada
+            // No se envió nada
             return -1;
         }
 
@@ -29,11 +29,11 @@ int sendMessage(int socket_fd, const void *buffer, size_t num_bytes) {
         enviados += (size_t)enviados_ahora;
     }
 
-    //Se enviaron todos los bytes
+    // Se enviaron todos los bytes
     return 0;
 }
 
-//Recibe exactamente num_bytes bytes
+// Recibe exactamente num_bytes bytes
 int recvMessage(int socket_fd, void *buffer_destino, size_t num_bytes) {
     size_t recibidos = 0;
     char *puntero_buffer = (char *)buffer_destino;
@@ -46,12 +46,12 @@ int recvMessage(int socket_fd, void *buffer_destino, size_t num_bytes) {
         );
 
         if (recibidos_ahora < 0) {
-            // error al recibir
+            // Error al recibir
             return -1;   
         }
 
         if (recibidos_ahora == 0) {
-            // el otro extremo cerró la conexión antes de tiempo
+            // El otro extremo cerró la conexión antes de tiempo
             return -1;   
         }
 
@@ -60,6 +60,6 @@ int recvMessage(int socket_fd, void *buffer_destino, size_t num_bytes) {
 
     }
 
-    //Se recibieron todos los bytes
+    // Se recibieron todos los bytes
     return 0;
 }

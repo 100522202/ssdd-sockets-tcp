@@ -8,67 +8,71 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <stdint.h>
+#include <pthread.h>
 #include "claves.h"
 #include "mensajes.h"
+#include "procesar_funcion.h"
 
 
 #define NUMBER_OF_PORTS 65535
 
-// Función auxiliar para procesar la operación exist
-int procesar_exist(int socket_especifico_fd) {
-    /* 1. Leer la longitud de la clave */
-    int32_t longitud_clave_red;
+// Mutex y cond var globales para proteger socket_especifico_fd
+static pthread_mutex_t mutex_socket = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t cond_var = PTHREAD_COND_INITIALIZER;
+static int leyendo = 0; // 1 = algún hijo leyendo el fd, 0 libre
 
-    if (recvMessage(socket_especifico_fd, &longitud_clave_red, sizeof(longitud_clave_red)) < 0) {
-        perror("recvMessage longitud_clave_red");
-        return -1;
+// Función para procesar las peticiones de los hilos
+void *procesar_peticion(void* socket_especifico_fd){
+    
+    // Bloquear antes de leer el fd
+    pthread_mutex_lock(&mutex_socket);
+    
+    // Leer el fd e indicar que ya no está leyendo
+    int fd_local = *(int*)socket_especifico_fd;
+
+    leyendo = 0;
+    // Avisar al hilo padre (servidor)
+    pthread_cond_signal(&cond_var);
+
+    pthread_mutex_unlock(&mutex_socket);
+
+    // ---- Tratamiento de la petición ----
+
+    // Leer el cod_op
+    unsigned char codigo_operacion;
+
+    if (recvMessage(fd_local, &codigo_operacion, sizeof(codigo_operacion)) < 0){
+        perror("recvMessage error leyendo el cod_op");
     }
 
-    /* 2. Pasar la longitud de formato de red a formato de máquina */
-    int32_t longitud_clave = ntohl(longitud_clave_red);
+    // Procesar según qué operación sea
 
-    printf("Longitud de clave recibida: %d\n", longitud_clave);
+    switch (codigo_operacion) {
+    case OP_SET:
 
-    /* 3. Validar la longitud */
-    if (longitud_clave < 0 || longitud_clave > 255) {
-        int32_t resultado_error = htonl(-1);
+        break;
+    case OP_GET:
+        
+        break;
+    case OP_MODIFY:
+        
+        break;
+    case OP_DELETE:
+        
+        break;
+    case OP_EXIST:
+        procesar_exist(fd_local);
+        break;
 
-        if (sendMessage(socket_especifico_fd, &resultado_error, sizeof(resultado_error)) < 0) {
-            perror("sendMessage resultado_error longitud");
-            return -1;
-        }
-
-        return 0;
+    case OP_DESTROY:
+        
+        break;
+    default:
+        // Código de operación desconocido: mandar error al cliente
+        
+        break;
     }
-
-    /* 4. Leer la clave */
-    char clave[256];
-
-    if (recvMessage(socket_especifico_fd, clave, (size_t)longitud_clave) < 0) {
-        perror("recvMessage clave");
-        return -1;
-    }
-
-    /* 5. Añadir fin de cadena para usarla como string de C */
-    clave[longitud_clave] = '\0';
-
-    printf("Clave recibida: %s\n", clave);
-
-    /* 6. Llamar a la lógica real */
-    int resultado_exist = exist(clave);
-
-    printf("Resultado de exist(\"%s\") = %d\n", clave, resultado_exist);
-
-    /* 7. Convertir el resultado a formato de red */
-    int32_t resultado_exist_red = htonl(resultado_exist);
-
-    /* 8. Enviar respuesta al cliente */
-    if (sendMessage(socket_especifico_fd, &resultado_exist_red, sizeof(resultado_exist_red)) < 0) {
-        perror("sendMessage resultado_exist_red");
-        return -1;
-    }
-
-    return 0;
+    pthread_exit(NULL);
 }
 
 int main(int argc, char * argv[]){
@@ -135,7 +139,7 @@ int main(int argc, char * argv[]){
         return -1;
     }
 
-    // poner el socket en escucha
+    // Poner el socket en escucha
     if (listen(socket_servidor_fd, SOMAXCONN) < 0) {
         perror("listen");
         close(socket_servidor_fd);
@@ -151,13 +155,41 @@ int main(int argc, char * argv[]){
         struct sockaddr_in client_addr;
         socklen_t client_len = sizeof(client_addr);
         
-        //Socket nuevo para cada cliente
+        // Socket nuevo para cada cliente
+
         int socket_especifico_fd = accept(socket_servidor_fd, (struct sockaddr *)&client_addr,  &client_len);
-        //Si hay un fallo se lanza error y se continúa escuchando
+        
+        // Si hay un fallo se lanza error y se continúa escuchando
+
         if (socket_especifico_fd < 0){
             perror("accept");
             continue;
         }
+
+
+        // Crear un hilo para procesar cada solicitud
+        
+        pthread_t id_hilo;
+        pthread_attr_t attr_hilo;
+
+        pthread_attr_init(&attr_hilo);
+        pthread_attr_setdetachstate(&attr_hilo, PTHREAD_CREATE_DETACHED);
+        
+        pthread_create(&id_hilo, &attr_hilo, procesar_peticion, (void *)&socket_especifico_fd);
+        pthread_attr_destroy(&attr_hilo);
+
+        // Proteger el fd (el padre servidor podría sobrescribir antes de que lo lea un hijo cliente)
+        pthread_mutex_lock(&mutex_socket);
+        
+        while (leyendo == 1){
+            // Esperar mientras haya un hilo copiando el fd (cuando termine será 0)
+            pthread_cond_wait(&cond_var, &mutex_socket);
+        }
+        
+        // Para que cuando lance al próximo hilo cliente tenga que esperar a que lea su fd
+        leyendo = 1;
+        pthread_mutex_unlock(&mutex_socket);
+
 
         printf("Conexión aceptada con IP %s y puerto %d\n", 
             inet_ntoa(client_addr.sin_addr),
@@ -168,12 +200,12 @@ int main(int argc, char * argv[]){
         
         if (recvMessage(socket_especifico_fd, &codigo_operacion, sizeof(codigo_operacion)) < 0){
             perror("recvMessage codigo_operacion");
-            //Cerrar el descriptor si hay un fallo
+            // Cerrar el descriptor si hay un fallo
             close(socket_especifico_fd);
             continue;
         }
-
-        //Si se llega aquí es que se ha recibido correctamente
+        /*
+        // Si se llega aquí es que se ha recibido correctamente el código de operación
         printf("Código de operación recibido: %u\n", codigo_operacion);
 
         if (codigo_operacion != OP_EXIST) {
@@ -187,12 +219,14 @@ int main(int argc, char * argv[]){
             continue;
         }
 
-        /* Si llega aquí, la operación es EXIST */
+        // Si llega aquí, la operación es EXIST
         if (procesar_exist(socket_especifico_fd) < 0) {
             close(socket_especifico_fd);
             continue;
         }
 
+        */
+        
         close(socket_especifico_fd);
     }
 

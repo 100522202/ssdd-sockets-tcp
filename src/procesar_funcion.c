@@ -9,7 +9,16 @@
 
 // TODO: necesitamos otro mutex para proteger la lista enlazada con las tuplas (si lo hacemos aquí es extern o algo así)
 
-// Función auxiliar para procesar la operación exist
+
+/* ---- FUNCIONES QUE SE COMUNICARÁN CON LA API ---- */
+
+/* Estas funciones pertenecientes al lado del servidor
+tienen como objetivo realizar la llamada a las funciones
+reales de la API. Para ello, harán el unmarshalling de los
+parámetros (convertirlos de bytes a su formato original)
+y llamarán a las funciones originales. */
+
+
 int procesar_exist(int socket_especifico_fd) {
     /* 1. Leer la longitud de la clave */
     int32_t longitud_clave_red;

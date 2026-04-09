@@ -189,45 +189,6 @@ int main(int argc, char * argv[]){
         // Para que cuando lance al próximo hilo cliente tenga que esperar a que lea su fd
         leyendo = 1;
         pthread_mutex_unlock(&mutex_socket);
-
-
-        printf("Conexión aceptada con IP %s y puerto %d\n", 
-            inet_ntoa(client_addr.sin_addr),
-            ntohs(client_addr.sin_port));
-
-        // Leer el código de operación
-        unsigned char codigo_operacion;
-        
-        if (recvMessage(socket_especifico_fd, &codigo_operacion, sizeof(codigo_operacion)) < 0){
-            perror("recvMessage codigo_operacion");
-            // Cerrar el descriptor si hay un fallo
-            close(socket_especifico_fd);
-            continue;
-        }
-        /*
-        // Si se llega aquí es que se ha recibido correctamente el código de operación
-        printf("Código de operación recibido: %u\n", codigo_operacion);
-
-        if (codigo_operacion != OP_EXIST) {
-            int32_t resultado_error = htonl(-1);
-
-            if (sendMessage(socket_especifico_fd, &resultado_error, sizeof(resultado_error)) < 0) {
-                perror("sendMessage resultado_error");
-            }
-
-            close(socket_especifico_fd);
-            continue;
-        }
-
-        // Si llega aquí, la operación es EXIST
-        if (procesar_exist(socket_especifico_fd) < 0) {
-            close(socket_especifico_fd);
-            continue;
-        }
-
-        */
-        
-        close(socket_especifico_fd);
     }
 
     return 0;

@@ -4,7 +4,7 @@
 #include <pthread.h>
 
 #include "mensajes.h"
-#include "procesar_funcion.h"
+#include "procesar-funcion.h"
 #include "claves.h"
 
 // TODO: necesitamos otro mutex para proteger la lista enlazada con las tuplas (si lo hacemos aquí es extern o algo así)
@@ -19,7 +19,7 @@ parámetros (convertirlos de bytes a su formato original)
 y llamarán a las funciones originales. */
 
 
-int procesar_exist(int socket_especifico_fd) {
+int procesar-exist(int socket_especifico_fd) {
     // 1. Leer la longitud de la clave
     int32_t longitud_clave_red;
 
@@ -75,7 +75,7 @@ int procesar_exist(int socket_especifico_fd) {
     return 0;
 }
 
-int procesar_set(int socket_especifico_fd) {
+int procesar-set(int socket_especifico_fd) {
     // 1. Leer la longitud de la clave
     int32_t longitud_clave_red;
 

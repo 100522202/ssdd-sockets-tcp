@@ -11,7 +11,7 @@
 #include <pthread.h>
 #include "claves.h"
 #include "mensajes.h"
-#include "procesar_funcion.h"
+#include "procesar-funcion.h"
 
 
 #define NUMBER_OF_PORTS 65535
@@ -22,7 +22,7 @@ static pthread_cond_t cond_var = PTHREAD_COND_INITIALIZER;
 static int leyendo = 0; // 1 = algún hijo leyendo el fd, 0 libre
 
 // Función para procesar las peticiones de los hilos
-void *procesar_peticion(void* socket_especifico_fd){
+void *procesar-peticion(void* socket_especifico_fd){
     
     // Bloquear antes de leer el fd
     pthread_mutex_lock(&mutex_socket);
@@ -49,27 +49,27 @@ void *procesar_peticion(void* socket_especifico_fd){
 
     switch (codigo_operacion) {
     case OP_SET:
-        procesar_set(fd_local);
+        procesar-set(fd_local);
         break;
 
     case OP_GET:
-        // procesar_get(fd_local);
+        // procesar-get(fd_local);
         break;
 
     case OP_MODIFY:
-        // procesar_modify(fd_local);
+        // procesar-modify(fd_local);
         break;
 
     case OP_DELETE:
-        // procesar_delete(fd_local);
+        // procesar-delete(fd_local);
         break;
 
     case OP_EXIST:
-        procesar_exist(fd_local);
+        procesar-exist(fd_local);
         break;
 
     case OP_DESTROY:
-        // procesar_destroy(fd_local);
+        // procesar-destroy(fd_local);
         break;
 
     default:
@@ -180,7 +180,7 @@ int main(int argc, char * argv[]){
         pthread_attr_init(&attr_hilo);
         pthread_attr_setdetachstate(&attr_hilo, PTHREAD_CREATE_DETACHED);
         
-        pthread_create(&id_hilo, &attr_hilo, procesar_peticion, (void *)&socket_especifico_fd);
+        pthread_create(&id_hilo, &attr_hilo, procesar-peticion, (void *)&socket_especifico_fd);
         pthread_attr_destroy(&attr_hilo);
 
         // Proteger el fd (el padre servidor podría sobrescribir antes de que lo lea un hijo cliente)

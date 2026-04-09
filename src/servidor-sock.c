@@ -49,26 +49,31 @@ void *procesar_peticion(void* socket_especifico_fd){
 
     switch (codigo_operacion) {
     case OP_SET:
+        procesar_set(fd_local);
+        break;
 
-        break;
     case OP_GET:
-        
+        // procesar_get(fd_local);
         break;
+
     case OP_MODIFY:
-        
+        // procesar_modify(fd_local);
         break;
+
     case OP_DELETE:
-        
+        // procesar_delete(fd_local);
         break;
+
     case OP_EXIST:
         procesar_exist(fd_local);
         break;
 
     case OP_DESTROY:
-        
+        // procesar_destroy(fd_local);
         break;
+
     default:
-        // Código de operación desconocido: mandar error al cliente
+        // TODO: Código de operación desconocido: mandar error al cliente
         
         break;
     }

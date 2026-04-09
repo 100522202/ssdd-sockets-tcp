@@ -140,7 +140,7 @@ realmente a las funciones de la API */
 // TODO: para memoria e incluso dejarlo aquí
 
 // Flujo de datos (con tamaño en B): 
-// [Cód_OP (1)][Len_clave(4)][Clave(Len_clave)][N_value2(4)][V_value2(N_value2)][value3(12)]
+// [Cód_OP (1)][Len_clave(4)][Clave(Len_clave)][Len_value1(4)][value1(Len_value1)][N_value2(4)][V_value2(N_value2 * 4)][value3(12)]
 // para memoria: len clave basta con 1 B pero si lo hacemos con 4 tenemos escalabilidad porque somos unos cracks 
 int exist(char *key) {
 

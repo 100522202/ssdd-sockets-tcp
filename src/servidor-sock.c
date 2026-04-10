@@ -43,6 +43,7 @@ void *procesar_peticion(void* socket_especifico_fd){
 
     if (recvMessage(fd_local, &codigo_operacion, sizeof(codigo_operacion)) < 0){
         perror("recvMessage error leyendo el cod_op");
+        pthread_exit(NULL);
     }
 
     // Procesar según qué operación sea
@@ -136,7 +137,7 @@ int main(int argc, char * argv[]){
         perror("socket");
         return -1;
     }
-
+    // TODO_ meter reuse addrs a la hora de crear todos los sockets
     // Unir addr y fd
     if (bind(socket_servidor_fd, (struct sockaddr *)&socket_servidor_addr, sizeof(socket_servidor_addr)) < 0){
         perror("bind");

@@ -34,6 +34,7 @@ int procesar_exist(int socket_especifico_fd) {
     // Validar la longitud
     if (longitud_clave < 0 || longitud_clave > 255) {
         int32_t resultado_error = htonl(-1);
+        // TODO: no hace falta porque tcp se encarga de enviar estos mensajes de error, justificar en memoria
         if (sendMessage(socket_especifico_fd, &resultado_error, sizeof(resultado_error)) < 0) {
             perror("sendMessage resultado_error longitud clave");
             return -1;

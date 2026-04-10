@@ -251,6 +251,8 @@ int set_value(char *key, char *value1, int N_value2, float *V_value2, struct Paq
     }
 
     // 6. Enviar la longitud de la clave
+
+    // TODO: en los sizeof mejor poner el tipo siempre y definir las variables al principio, queda más claro aunque gemini me dijo que no
     int32_t longitud_clave_red = htonl(longitud_clave);
     if (sendMessage(socket_cliente_fd, &longitud_clave_red, sizeof(longitud_clave_red)) < 0) {
         close(socket_cliente_fd);
@@ -284,6 +286,7 @@ int set_value(char *key, char *value1, int N_value2, float *V_value2, struct Paq
     }
 
     // 11. Enviar V_value2
+    // hacer bucle para enviarlos uno a uno, hay que marshallizarlos tambien, htonf para evitar castings
     if (sendMessage(socket_cliente_fd, V_value2, sizeof(float) * N_value2) < 0) {
         close(socket_cliente_fd);
         return -1;

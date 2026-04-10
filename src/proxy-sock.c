@@ -328,3 +328,307 @@ int set_value(char *key, char *value1, int N_value2, float *V_value2, struct Paq
     return resultado;
     
 }
+
+int get_value(char *key, char *value1, int *N_value2, float *V_value2, struct Paquete *value3) {
+    // 1. Obtener el socket ya conectado al servidor, se utiliza la función auxiliar
+    int socket_cliente_fd = obtener_socket_conectado();
+
+    // Validar fd
+    if (socket_cliente_fd < 0){
+        perror("socket cliente");
+        return -1;
+    }
+
+    // Validar punteros
+    if (key == NULL || value1 == NULL || N_value2 == NULL || V_value2 == NULL || value3 == NULL) {
+        close(socket_cliente_fd);
+        return -1;
+    }
+
+    // 2. Obtener y validar la longitud de la clave
+    int32_t longitud_clave = (int32_t)strlen(key);
+    if (longitud_clave > 255) {
+        close(socket_cliente_fd);
+        return -1;
+    }
+
+    // 3. Enviar el código de operación
+    unsigned char codigo_operacion = OP_GET;
+    if (sendMessage(socket_cliente_fd, &codigo_operacion, sizeof(codigo_operacion)) < 0) {
+        close(socket_cliente_fd);
+        return -1;
+    }
+
+    // 4. Enviar la longitud de la clave
+    int32_t longitud_clave_red = htonl(longitud_clave);
+    if (sendMessage(socket_cliente_fd, &longitud_clave_red, sizeof(longitud_clave_red)) < 0) {
+        close(socket_cliente_fd);
+        return -1;
+    }
+
+    // 5. Enviar la clave
+    if (sendMessage(socket_cliente_fd, key, (size_t)longitud_clave) < 0) {
+        close(socket_cliente_fd);
+        return -1;
+    }
+
+    // 6. Recibir el resultado y convertirlo a formato máquina
+    int32_t resultado_red;
+    if (recvMessage(socket_cliente_fd, &resultado_red, sizeof(resultado_red)) < 0) {
+        close(socket_cliente_fd);
+        return -1;       
+    }
+
+    int resultado = ntohl(resultado_red);
+
+    // Si el resultado es éxito, recibir el resto de datos
+    if (resultado == 0) {
+        // Recibir longitud value1
+        int32_t len_v1_red;
+        if (recvMessage(socket_cliente_fd, &len_v1_red, sizeof(int32_t)) < 0) {
+            close(socket_cliente_fd); return -1;
+        }
+        int32_t len_v1 = ntohl(len_v1_red);
+
+        // Recibir cadena value1
+        if (recvMessage(socket_cliente_fd, value1, len_v1) < 0) {
+            close(socket_cliente_fd); return -1;
+        }
+        value1[len_v1] = '\0';
+
+        // Recibir N_value2
+        int32_t n2_red;
+        if (recvMessage(socket_cliente_fd, &n2_red, sizeof(int32_t)) < 0) {
+            close(socket_cliente_fd); return -1;
+        }
+        *N_value2 = ntohl(n2_red);
+
+        // Recibir V_value2
+        if (recvMessage(socket_cliente_fd, V_value2, sizeof(float) * (*N_value2)) < 0) {
+            close(socket_cliente_fd); return -1;
+        }
+
+        // Recibir el struct paquete value3
+        int32_t x_net, y_net, z_net;
+        if (recvMessage(socket_cliente_fd, &x_net, sizeof(int32_t)) < 0) {
+            close(socket_cliente_fd); return -1;
+        }
+        if (recvMessage(socket_cliente_fd, &y_net, sizeof(int32_t)) < 0) {
+            close(socket_cliente_fd); return -1;
+        }
+        if (recvMessage(socket_cliente_fd, &z_net, sizeof(int32_t)) < 0) {
+            close(socket_cliente_fd); return -1;
+        }
+        value3->x = ntohl(x_net);
+        value3->y = ntohl(y_net);
+        value3->z = ntohl(z_net);
+    }
+
+    // 7. Cerrar el socket y devolver el resultado
+    close(socket_cliente_fd);
+    return resultado;
+}
+
+int modify_value(char *key, char *value1, int N_value2, float *V_value2, struct Paquete value3) {
+    // 1. Obtener el socket ya conectado al servidor, se utiliza la función auxiliar
+    int socket_cliente_fd = obtener_socket_conectado();
+
+    // Validar fd
+    if (socket_cliente_fd < 0){
+        perror("socket cliente");
+        return -1;
+    }
+
+    // Validar punteros
+    if (key == NULL || value1 == NULL || V_value2 == NULL) {
+        close(socket_cliente_fd);
+        return -1;
+    }
+
+    // 2. Obtener y validar la longitud de la clave
+    int32_t longitud_clave = (int32_t)strlen(key);
+    if (longitud_clave > 255) {
+        close(socket_cliente_fd);
+        return -1;
+    }
+
+    // 3. Obtener y validar la longitud de value1
+    int32_t longitud_value1 = (int32_t)strlen(value1);
+    if (longitud_value1 > 255) {
+        close(socket_cliente_fd);
+        return -1;
+    }
+
+    // 4. Validar N_value2 y cambiar su formato
+    if (N_value2 > 32 || N_value2 < 1){
+        close(socket_cliente_fd);
+        return -1;
+    }
+
+    int32_t new_N_value2 = (int32_t)N_value2;
+
+    // 5. Enviar el código de operación
+    unsigned char codigo_operacion = OP_MODIFY;
+    if (sendMessage(socket_cliente_fd, &codigo_operacion, sizeof(codigo_operacion)) < 0) {
+        close(socket_cliente_fd);
+        return -1;
+    }
+
+    // 6. Enviar la longitud de la clave
+    int32_t longitud_clave_red = htonl(longitud_clave);
+    if (sendMessage(socket_cliente_fd, &longitud_clave_red, sizeof(longitud_clave_red)) < 0) {
+        close(socket_cliente_fd);
+        return -1;
+    }
+
+    // 7. Enviar la clave
+    if (sendMessage(socket_cliente_fd, key, (size_t)longitud_clave) < 0) {
+        close(socket_cliente_fd);
+        return -1;
+    }
+
+    // 8. Enviar longitud value1
+    int32_t longitud_value1_red = htonl(longitud_value1);
+    if (sendMessage(socket_cliente_fd, &longitud_value1_red, sizeof(longitud_value1_red)) < 0) {
+        close(socket_cliente_fd);
+        return -1;
+    }
+
+    // 9. Enviar cadena value1
+    if (sendMessage(socket_cliente_fd, value1, (size_t)longitud_value1) < 0) {
+        close(socket_cliente_fd);
+        return -1;
+    }
+
+    // 10. Enviar N_value2
+    int32_t Nvalue2_red = htonl(new_N_value2);
+    if (sendMessage(socket_cliente_fd, &Nvalue2_red, sizeof(Nvalue2_red)) < 0) {
+        close(socket_cliente_fd);
+        return -1;
+    }
+
+    // 11. Enviar V_value2
+    if (sendMessage(socket_cliente_fd, V_value2, sizeof(float) * N_value2) < 0) {
+        close(socket_cliente_fd);
+        return -1;
+    }
+
+    // 12. Enviar el struct paquete value3
+
+    // "Marshallizar" cada uno de sus enteros
+    int32_t x_net = htonl(value3.x);
+    int32_t y_net = htonl(value3.y);
+    int32_t z_net = htonl(value3.z);
+
+    // Enviarlos
+    if (sendMessage(socket_cliente_fd, &x_net, sizeof(int32_t)) < 0) {
+        close(socket_cliente_fd); return -1;
+    }
+    if (sendMessage(socket_cliente_fd, &y_net, sizeof(int32_t)) < 0) {
+        close(socket_cliente_fd); return -1;
+    }
+    if (sendMessage(socket_cliente_fd, &z_net, sizeof(int32_t)) < 0) {
+        close(socket_cliente_fd); return -1;
+    }
+
+    // 13. Recibir el resultado y convertirlo a formato máquina
+    int32_t resultado_red;
+    if (recvMessage(socket_cliente_fd, &resultado_red, sizeof(resultado_red)) < 0) {
+        close(socket_cliente_fd);
+        return -1;       
+    }
+
+    int resultado = ntohl(resultado_red);
+
+    // 14. Cerrar el socket y devolver el resultado
+    close(socket_cliente_fd);
+    return resultado;
+}
+
+int delete_key(char *key) {
+    // 1. Obtener el socket ya conectado al servidor, se utiliza la función auxiliar
+    int socket_cliente_fd = obtener_socket_conectado();
+
+    // Validar fd
+    if (socket_cliente_fd < 0){
+        perror("socket cliente");
+        return -1;
+    }
+
+    // Validar punteros
+    if (key == NULL) {
+        close(socket_cliente_fd);
+        return -1;
+    }
+
+    // 2. Obtener y validar la longitud de la clave
+    int32_t longitud_clave = (int32_t)strlen(key);
+    if (longitud_clave > 255) {
+        close(socket_cliente_fd);
+        return -1;
+    }
+
+    // 3. Enviar el código de operación
+    unsigned char codigo_operacion = OP_DELETE;
+    if (sendMessage(socket_cliente_fd, &codigo_operacion, sizeof(codigo_operacion)) < 0) {
+        close(socket_cliente_fd);
+        return -1;
+    }
+
+    // 4. Enviar la longitud de la clave
+    int32_t longitud_clave_red = htonl(longitud_clave);
+    if (sendMessage(socket_cliente_fd, &longitud_clave_red, sizeof(longitud_clave_red)) < 0) {
+        close(socket_cliente_fd);
+        return -1;
+    }
+
+    // 5. Enviar la clave
+    if (sendMessage(socket_cliente_fd, key, (size_t)longitud_clave) < 0) {
+        close(socket_cliente_fd);
+        return -1;
+    }
+
+    // 6. Recibir el resultado y convertirlo a formato máquina
+    int32_t resultado_red;
+    if (recvMessage(socket_cliente_fd, &resultado_red, sizeof(resultado_red)) < 0) {
+        close(socket_cliente_fd);
+        return -1;       
+    }
+
+    int resultado = ntohl(resultado_red);
+
+    // 7. Cerrar el socket y devolver el resultado
+    close(socket_cliente_fd);
+    return resultado;
+}
+
+int destroy() {
+    // 1. Obtener el socket ya conectado al servidor, se utiliza la función auxiliar
+    int socket_cliente_fd = obtener_socket_conectado();
+
+    // Validar fd
+    if (socket_cliente_fd < 0){
+        perror("socket cliente");
+        return -1;
+    }
+
+    // 2. Enviar el código de operación
+    unsigned char codigo_operacion = OP_DESTROY;
+    if (sendMessage(socket_cliente_fd, &codigo_operacion, sizeof(codigo_operacion)) < 0) {
+        close(socket_cliente_fd);
+        return -1;
+    }
+
+    // 3. Recibir el resultado y convertirlo a formato máquina
+    int32_t resultado_red;
+    if (recvMessage(socket_cliente_fd, &resultado_red, sizeof(resultado_red)) < 0) {
+        close(socket_cliente_fd);
+        return -1;       
+    }
+
+    int resultado = ntohl(resultado_red);
+
+    // 4. Cerrar el socket y devolver el resultado
+    close(socket_cliente_fd);
+    return resultado;
+}

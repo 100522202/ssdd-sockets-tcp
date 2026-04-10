@@ -53,15 +53,15 @@ void *procesar_peticion(void* socket_especifico_fd){
         break;
 
     case OP_GET:
-        // procesar_get(fd_local);
+        procesar_get(fd_local);
         break;
 
     case OP_MODIFY:
-        // procesar_modify(fd_local);
+        procesar_modify(fd_local);
         break;
 
     case OP_DELETE:
-        // procesar_delete(fd_local);
+        procesar_delete(fd_local);
         break;
 
     case OP_EXIST:
@@ -69,7 +69,7 @@ void *procesar_peticion(void* socket_especifico_fd){
         break;
 
     case OP_DESTROY:
-        // procesar_destroy(fd_local);
+        procesar_destroy(fd_local);
         break;
 
     default:

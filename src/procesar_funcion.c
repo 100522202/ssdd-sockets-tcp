@@ -2,12 +2,26 @@
 #include <stdint.h>
 #include <arpa/inet.h>
 #include <pthread.h>
+#include <string.h>
 
 #include "mensajes.h"
 #include "procesar_funcion.h"
 #include "claves.h"
 
-// TODO: necesitamos otro mutex para proteger la lista enlazada con las tuplas (si lo hacemos aquí es extern o algo así)
+static pthread_mutex_t mutex_lista = PTHREAD_MUTEX_INITIALIZER;
+
+static uint32_t float_to_network(float valor) {
+    uint32_t valor_u32;
+    memcpy(&valor_u32, &valor, sizeof(valor_u32));
+    return htonl(valor_u32);
+}
+
+static float float_from_network(uint32_t valor_red) {
+    uint32_t valor_host = ntohl(valor_red);
+    float valor;
+    memcpy(&valor, &valor_host, sizeof(valor));
+    return valor;
+}
 
 
 /* ---- FUNCIONES QUE SE COMUNICARÁN CON LA API ---- */
@@ -34,7 +48,6 @@ int procesar_exist(int socket_especifico_fd) {
     // Validar la longitud
     if (longitud_clave < 0 || longitud_clave > 255) {
         int32_t resultado_error = htonl(-1);
-        // TODO: no hace falta porque tcp se encarga de enviar estos mensajes de error, justificar en memoria
         if (sendMessage(socket_especifico_fd, &resultado_error, sizeof(resultado_error)) < 0) {
             perror("sendMessage resultado_error longitud clave");
             return -1;
@@ -51,14 +64,9 @@ int procesar_exist(int socket_especifico_fd) {
     clave[longitud_clave] = '\0';
 
     // 3. Llamar a la lógica real
-    // TODO: supuestamente aquí va el mutex
-    /*
     pthread_mutex_lock(&mutex_lista);
     int resultado_exist = exist(clave);
     pthread_mutex_unlock(&mutex_lista);
-    */
-
-    int resultado_exist = exist(clave);
 
     printf("Resultado de exist(\"%s\") = %d\n", clave, resultado_exist);
 
@@ -176,10 +184,13 @@ int procesar_set(int socket_especifico_fd) {
 
     // 5. Leer V_value2
     float V_value2[N_value2];
-
-    if (recvMessage(socket_especifico_fd, V_value2, N_value2 * sizeof(float)) < 0) {
-        perror("recvMessage V_Value2");
-        return -1;
+    for (int i = 0; i < N_value2; i++) {
+        uint32_t valor_red;
+        if (recvMessage(socket_especifico_fd, &valor_red, sizeof(valor_red)) < 0) {
+            perror("recvMessage V_Value2");
+            return -1;
+        }
+        V_value2[i] = float_from_network(valor_red);
     }
 
     // 6. Leer value3
@@ -205,14 +216,9 @@ int procesar_set(int socket_especifico_fd) {
     value3.z = ntohl(z_red);
 
     // 7. Llamar a la lógica real
-    // TODO: supuestamente aquí va el mutex
-    /*
     pthread_mutex_lock(&mutex_lista);
-    int resultado = set_value(key, value1, n_v2, v_value2, v3);
-    pthread_mutex_unlock(&mutex_lista);
-    */
-
     int resultado_set_value = set_value(clave, value1, N_value2, V_value2, value3);
+    pthread_mutex_unlock(&mutex_lista);
 
     printf("Resultado de exist(\"%s\") = %d\n", clave, resultado_set_value);
 
@@ -227,6 +233,7 @@ int procesar_set(int socket_especifico_fd) {
 
     return 0;
 }
+
 int procesar_get(int socket_especifico_fd) {
     // 1. Leer la longitud de la clave
     int32_t longitud_clave_red;
@@ -268,14 +275,9 @@ int procesar_get(int socket_especifico_fd) {
     struct Paquete value3;
 
     // 4. Llamar a la lógica real
-    // TODO: supuestamente aquí va el mutex
-    /*
     pthread_mutex_lock(&mutex_lista);
     int resultado_get_value = get_value(clave, value1, &N_value2, V_value2, &value3);
     pthread_mutex_unlock(&mutex_lista);
-    */
-
-    int resultado_get_value = get_value(clave, value1, &N_value2, V_value2, &value3);
 
     printf("Resultado de get_value(\"%s\") = %d\n", clave, resultado_get_value);
 
@@ -310,9 +312,12 @@ int procesar_get(int socket_especifico_fd) {
         }
 
         // Enviar V_value2
-        if (sendMessage(socket_especifico_fd, V_value2, (size_t)N_value2 * sizeof(float)) < 0) {
-            perror("sendMessage V_value2");
-            return -1;
+        for (int i = 0; i < N_value2; i++) {
+            uint32_t valor_red = float_to_network(V_value2[i]);
+            if (sendMessage(socket_especifico_fd, &valor_red, sizeof(valor_red)) < 0) {
+                perror("sendMessage V_value2");
+                return -1;
+            }
         }
 
         // Enviar value3 (x, y, z) marshallizados
@@ -345,6 +350,14 @@ int procesar_modify(int socket_especifico_fd) {
         return -1;
     }
     int32_t longitud_clave = ntohl(longitud_clave_red);
+    if (longitud_clave < 0 || longitud_clave > 255) {
+        int32_t resultado_error = htonl(-1);
+        if (sendMessage(socket_especifico_fd, &resultado_error, sizeof(resultado_error)) < 0) {
+            perror("sendMessage resultado_error longitud clave");
+            return -1;
+        }
+        return 0;
+    }
 
     // 2. Leer la clave
     char clave[256];
@@ -362,6 +375,14 @@ int procesar_modify(int socket_especifico_fd) {
         return -1;
     }
     int32_t len_v1 = ntohl(len_v1_red);
+    if (len_v1 < 0 || len_v1 > 255) {
+        int32_t resultado_error = htonl(-1);
+        if (sendMessage(socket_especifico_fd, &resultado_error, sizeof(resultado_error)) < 0) {
+            perror("sendMessage resultado_error len value1");
+            return -1;
+        }
+        return 0;
+    }
     if (recvMessage(socket_especifico_fd, value1, (size_t)len_v1) < 0) {
         perror("recvMessage value1");
         return -1;
@@ -375,12 +396,24 @@ int procesar_modify(int socket_especifico_fd) {
         return -1;
     }
     int32_t N_value2 = ntohl(N_value2_red);
+    if (N_value2 < 1 || N_value2 > 32) {
+        int32_t resultado_error = htonl(-1);
+        if (sendMessage(socket_especifico_fd, &resultado_error, sizeof(resultado_error)) < 0) {
+            perror("sendMessage resultado_error N_value2");
+            return -1;
+        }
+        return 0;
+    }
 
     // 5. Leer V_value2
     float V_value2[32];
-    if (recvMessage(socket_especifico_fd, V_value2, (size_t)N_value2 * sizeof(float)) < 0) {
-        perror("recvMessage V_value2");
-        return -1;
+    for (int i = 0; i < N_value2; i++) {
+        uint32_t valor_red;
+        if (recvMessage(socket_especifico_fd, &valor_red, sizeof(valor_red)) < 0) {
+            perror("recvMessage V_value2");
+            return -1;
+        }
+        V_value2[i] = float_from_network(valor_red);
     }
 
     // 6. Leer value3
@@ -394,13 +427,9 @@ int procesar_modify(int socket_especifico_fd) {
     value3.z = ntohl(z_red);
 
     // 7. Llamar a la lógica real
-    // TODO: supuestamente aquí va el mutex
-    /*
     pthread_mutex_lock(&mutex_lista);
     int resultado_modify = modify_value(clave, value1, N_value2, V_value2, value3);
     pthread_mutex_unlock(&mutex_lista);
-    */
-    int resultado_modify = modify_value(clave, value1, N_value2, V_value2, value3);
 
     // 8. Enviar respuesta
     int32_t resultado_red = htonl(resultado_modify);
@@ -420,6 +449,14 @@ int procesar_delete(int socket_especifico_fd) {
         return -1;
     }
     int32_t longitud_clave = ntohl(longitud_clave_red);
+    if (longitud_clave < 0 || longitud_clave > 255) {
+        int32_t resultado_error = htonl(-1);
+        if (sendMessage(socket_especifico_fd, &resultado_error, sizeof(resultado_error)) < 0) {
+            perror("sendMessage resultado_error longitud clave");
+            return -1;
+        }
+        return 0;
+    }
 
     // 2. Leer la clave
     char clave[256];
@@ -430,13 +467,9 @@ int procesar_delete(int socket_especifico_fd) {
     clave[longitud_clave] = '\0';
 
     // 3. Llamar a la lógica real
-    // TODO: supuestamente aquí va el mutex
-    /*
     pthread_mutex_lock(&mutex_lista);
     int resultado_delete = delete_key(clave);
     pthread_mutex_unlock(&mutex_lista);
-    */
-    int resultado_delete = delete_key(clave);
 
     // 4. Enviar respuesta
     int32_t resultado_red = htonl(resultado_delete);
@@ -450,13 +483,9 @@ int procesar_delete(int socket_especifico_fd) {
 
 int procesar_destroy(int socket_especifico_fd) {
     // 1. Llamar a la lógica real
-    // TODO: supuestamente aquí va el mutex
-    /*
     pthread_mutex_lock(&mutex_lista);
     int resultado_destroy = destroy();
     pthread_mutex_unlock(&mutex_lista);
-    */
-    int resultado_destroy = destroy();
 
     // 2. Enviar respuesta
     int32_t resultado_red = htonl(resultado_destroy);

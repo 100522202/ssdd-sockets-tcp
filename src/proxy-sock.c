@@ -14,6 +14,19 @@
 
 #define NUMBER_OF_PORTS 65535
 
+static uint32_t float_to_network(float valor) {
+    uint32_t valor_u32;
+    memcpy(&valor_u32, &valor, sizeof(valor_u32));
+    return htonl(valor_u32);
+}
+
+static float float_from_network(uint32_t valor_red) {
+    uint32_t valor_host = ntohl(valor_red);
+    float valor;
+    memcpy(&valor, &valor_host, sizeof(valor));
+    return valor;
+}
+
 // Función interna del proxy para leer IP_TUPLAS y PORT_TUPLAS
 static int leer_configuracion_servidor(const char **ip_servidor,  uint16_t *puerto_servidor) {
     // Leer variables de entorno
@@ -29,9 +42,6 @@ static int leer_configuracion_servidor(const char **ip_servidor,  uint16_t *puer
         printf("ERROR: variable de entorno PORT_TUPLAS no definida\n");
         return -1;
     }
-
-    printf("IP_TUPLAS = %s\n", ip_tuplas);
-    printf("PORT_TUPLAS = %s\n", port_tuplas);
 
     //Convertir el puerto de texto a número 
     char *endptr;
@@ -78,9 +88,6 @@ static int obtener_socket_conectado(void) {
         return -1;
     }
 
-    // Si se llega aquí es que se ha leído correctamente
-    printf("Configuración del servidor leída correctamente: IP=%s, puerto=%u\n", ip_servidor, puerto_servidor);
-
     // 2. Crear el socket del cliente
     int socket_cliente_fd = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -88,8 +95,6 @@ static int obtener_socket_conectado(void) {
         perror("socket cliente");
         return -1;
     }
-
-    printf("Socket TCP del cliente creado correctamente\n");
 
     // 3. Crear la dirección del servidor
     struct sockaddr_in direccion_servidor;
@@ -112,8 +117,6 @@ static int obtener_socket_conectado(void) {
     // Ya se tiene la ip, ahora se copia dentro de sin_addr
     memcpy(&direccion_servidor.sin_addr, informacion_host->h_addr, informacion_host->h_length);
 
-    printf("Dirección del servidor creada correctamente\n");
-
     // 4. Conectar
     if (connect(socket_cliente_fd, (struct sockaddr *)&direccion_servidor,
                 sizeof(direccion_servidor)) < 0) {
@@ -121,8 +124,6 @@ static int obtener_socket_conectado(void) {
         close(socket_cliente_fd);
         return -1;
     }
-
-    printf("Conexión entre cliente y servidor establecida correctamente\n");
 
     // Devolver el socket del cliente ya conectado correctamente
     return socket_cliente_fd;
@@ -136,8 +137,6 @@ API real de cara al cliente, para ello harán el
 marshalling de los parámetros (pasarlos a bytes) y se 
 los enviarán al socket conectado a servidor, que llamará
 realmente a las funciones de la API */
-
-// TODO: para memoria e incluso dejarlo aquí
 
 // Flujo de datos (con tamaño en B): 
 // [Cód_OP (1)][Len_clave(4)][Clave(Len_clave)][Len_value1(4)][value1(Len_value1)][N_value2(4)][V_value2(N_value2 * 4)][value3(12)]
@@ -252,7 +251,6 @@ int set_value(char *key, char *value1, int N_value2, float *V_value2, struct Paq
 
     // 6. Enviar la longitud de la clave
 
-    // TODO: en los sizeof mejor poner el tipo siempre y definir las variables al principio, queda más claro aunque gemini me dijo que no
     int32_t longitud_clave_red = htonl(longitud_clave);
     if (sendMessage(socket_cliente_fd, &longitud_clave_red, sizeof(longitud_clave_red)) < 0) {
         close(socket_cliente_fd);
@@ -286,10 +284,12 @@ int set_value(char *key, char *value1, int N_value2, float *V_value2, struct Paq
     }
 
     // 11. Enviar V_value2
-    // hacer bucle para enviarlos uno a uno, hay que marshallizarlos tambien, htonf para evitar castings
-    if (sendMessage(socket_cliente_fd, V_value2, sizeof(float) * N_value2) < 0) {
-        close(socket_cliente_fd);
-        return -1;
+    for (int i = 0; i < N_value2; i++) {
+        uint32_t valor_red = float_to_network(V_value2[i]);
+        if (sendMessage(socket_cliente_fd, &valor_red, sizeof(valor_red)) < 0) {
+            close(socket_cliente_fd);
+            return -1;
+        }
     }
 
     // 12. Enviar el struct paquete value3
@@ -392,9 +392,13 @@ int get_value(char *key, char *value1, int *N_value2, float *V_value2, struct Pa
             close(socket_cliente_fd); return -1;
         }
         int32_t len_v1 = ntohl(len_v1_red);
+        if (len_v1 < 0 || len_v1 > 255) {
+            close(socket_cliente_fd);
+            return -1;
+        }
 
         // Recibir cadena value1
-        if (recvMessage(socket_cliente_fd, value1, len_v1) < 0) {
+        if (recvMessage(socket_cliente_fd, value1, (size_t)len_v1) < 0) {
             close(socket_cliente_fd); return -1;
         }
         value1[len_v1] = '\0';
@@ -405,10 +409,19 @@ int get_value(char *key, char *value1, int *N_value2, float *V_value2, struct Pa
             close(socket_cliente_fd); return -1;
         }
         *N_value2 = ntohl(n2_red);
+        if (*N_value2 < 1 || *N_value2 > 32) {
+            close(socket_cliente_fd);
+            return -1;
+        }
 
         // Recibir V_value2
-        if (recvMessage(socket_cliente_fd, V_value2, sizeof(float) * (*N_value2)) < 0) {
-            close(socket_cliente_fd); return -1;
+        for (int i = 0; i < *N_value2; i++) {
+            uint32_t valor_red;
+            if (recvMessage(socket_cliente_fd, &valor_red, sizeof(valor_red)) < 0) {
+                close(socket_cliente_fd);
+                return -1;
+            }
+            V_value2[i] = float_from_network(valor_red);
         }
 
         // Recibir el struct paquete value3
@@ -511,9 +524,12 @@ int modify_value(char *key, char *value1, int N_value2, float *V_value2, struct 
     }
 
     // 11. Enviar V_value2
-    if (sendMessage(socket_cliente_fd, V_value2, sizeof(float) * N_value2) < 0) {
-        close(socket_cliente_fd);
-        return -1;
+    for (int i = 0; i < N_value2; i++) {
+        uint32_t valor_red = float_to_network(V_value2[i]);
+        if (sendMessage(socket_cliente_fd, &valor_red, sizeof(valor_red)) < 0) {
+            close(socket_cliente_fd);
+            return -1;
+        }
     }
 
     // 12. Enviar el struct paquete value3

@@ -16,6 +16,9 @@ int sendMessage(int socket_fd, const void *buffer, size_t num_bytes) {
         );
 
         if (enviados_ahora < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
             // Error al enviar
             return -1; 
         }
@@ -46,6 +49,9 @@ int recvMessage(int socket_fd, void *buffer_destino, size_t num_bytes) {
         );
 
         if (recibidos_ahora < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
             // Error al recibir
             return -1;   
         }

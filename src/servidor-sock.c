@@ -16,25 +16,12 @@
 
 #define NUMBER_OF_PORTS 65535
 
-// Mutex y cond var globales para proteger socket_especifico_fd
-static pthread_mutex_t mutex_socket = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t cond_var = PTHREAD_COND_INITIALIZER;
-static int leyendo = 0; // 1 = algún hijo leyendo el fd, 0 libre
-
 // Función para procesar las peticiones de los hilos
 void *procesar_peticion(void* socket_especifico_fd){
-    
-    // Bloquear antes de leer el fd
-    pthread_mutex_lock(&mutex_socket);
-    
-    // Leer el fd e indicar que ya no está leyendo
+    // El padre reserva este entero para evitar carreras al pasar el fd al hilo.
     int fd_local = *(int*)socket_especifico_fd;
-
-    leyendo = 0;
-    // Avisar al hilo padre (servidor)
-    pthread_cond_signal(&cond_var);
-
-    pthread_mutex_unlock(&mutex_socket);
+    // Ya hemos copiado el valor: liberamos la memoria dinámica cuanto antes.
+    free(socket_especifico_fd);
 
     // ---- Tratamiento de la petición ----
 
@@ -42,7 +29,7 @@ void *procesar_peticion(void* socket_especifico_fd){
     unsigned char codigo_operacion;
 
     if (recvMessage(fd_local, &codigo_operacion, sizeof(codigo_operacion)) < 0){
-        perror("recvMessage error leyendo el cod_op");
+        close(fd_local);
         pthread_exit(NULL);
     }
 
@@ -74,10 +61,13 @@ void *procesar_peticion(void* socket_especifico_fd){
         break;
 
     default:
-        // TODO: Código de operación desconocido: mandar error al cliente
-        
+    {
+        int32_t resultado_error = htonl(-1);
+        sendMessage(fd_local, &resultado_error, sizeof(resultado_error));
         break;
     }
+    }
+    close(fd_local);
     pthread_exit(NULL);
 }
 
@@ -137,7 +127,13 @@ int main(int argc, char * argv[]){
         perror("socket");
         return -1;
     }
-    // TODO_ meter reuse addrs a la hora de crear todos los sockets
+    int reuse_addr = 1;
+    if (setsockopt(socket_servidor_fd, SOL_SOCKET, SO_REUSEADDR, &reuse_addr, sizeof(reuse_addr)) < 0) {
+        perror("setsockopt SO_REUSEADDR");
+        close(socket_servidor_fd);
+        return -1;
+    }
+
     // Unir addr y fd
     if (bind(socket_servidor_fd, (struct sockaddr *)&socket_servidor_addr, sizeof(socket_servidor_addr)) < 0){
         perror("bind");
@@ -175,26 +171,28 @@ int main(int argc, char * argv[]){
 
         // Crear un hilo para procesar cada solicitud
         
+        // Reservamos un entero por conexión para pasar el fd al hilo sin compartir
+        // la variable local del bucle principal.
+        int *socket_hilo_fd = malloc(sizeof(*socket_hilo_fd));
+        if (socket_hilo_fd == NULL) {
+            perror("malloc socket_hilo_fd");
+            close(socket_especifico_fd);
+            continue;
+        }
+        *socket_hilo_fd = socket_especifico_fd;
+
         pthread_t id_hilo;
         pthread_attr_t attr_hilo;
 
         pthread_attr_init(&attr_hilo);
         pthread_attr_setdetachstate(&attr_hilo, PTHREAD_CREATE_DETACHED);
-        
-        pthread_create(&id_hilo, &attr_hilo, procesar_peticion, (void *)&socket_especifico_fd);
-        pthread_attr_destroy(&attr_hilo);
 
-        // Proteger el fd (el padre servidor podría sobrescribir antes de que lo lea un hijo cliente)
-        pthread_mutex_lock(&mutex_socket);
-        
-        while (leyendo == 1){
-            // Esperar mientras haya un hilo copiando el fd (cuando termine será 0)
-            pthread_cond_wait(&cond_var, &mutex_socket);
+        if (pthread_create(&id_hilo, &attr_hilo, procesar_peticion, (void *)socket_hilo_fd) != 0) {
+            perror("pthread_create");
+            close(socket_especifico_fd);
+            free(socket_hilo_fd);
         }
-        
-        // Para que cuando lance al próximo hilo cliente tenga que esperar a que lea su fd
-        leyendo = 1;
-        pthread_mutex_unlock(&mutex_socket);
+        pthread_attr_destroy(&attr_hilo);
     }
 
     return 0;

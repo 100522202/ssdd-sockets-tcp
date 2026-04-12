@@ -220,7 +220,7 @@ int procesar_set(int socket_especifico_fd) {
     int resultado_set_value = set_value(clave, value1, N_value2, V_value2, value3);
     pthread_mutex_unlock(&mutex_lista);
 
-    printf("Resultado de exist(\"%s\") = %d\n", clave, resultado_set_value);
+    printf("Resultado de set_value(\"%s\") = %d\n", clave, resultado_set_value);
 
     // 8. Convertir el resultado a formato de red
     int32_t resultado_set_value_red = htonl(resultado_set_value);

@@ -6,7 +6,7 @@
 #   - libproxyclaves.so   (proxy cliente -> servidor por TCP)
 #   - servidor            (servicio concurrente)
 #   - cliente             (desde src/app-cliente.c)
-#   - cliente1            (desde src/app-cliente1.c)
+#   - cliente1            (desde src/app-cliente-1.c)
 # ============================================================
 
 # Compilador y flags comunes
@@ -38,7 +38,7 @@ OBJ_PROXY := $(BUILD_DIR)/proxy-sock.o
 OBJ_SERVER_MAIN := $(BUILD_DIR)/servidor-sock.o
 OBJ_PROCESAR := $(BUILD_DIR)/procesar_funcion.o
 OBJ_CLIENT_MAIN := $(BUILD_DIR)/app-cliente.o
-OBJ_CLIENT1_MAIN := $(BUILD_DIR)/app-cliente1.o
+OBJ_CLIENT1_MAIN := $(BUILD_DIR)/app-cliente-1.o
 
 # Regla por defecto: construir todo
 .PHONY: all
@@ -69,7 +69,7 @@ $(OBJ_PROCESAR): $(SRC_DIR)/procesar_funcion.c include/procesar_funcion.h includ
 $(OBJ_CLIENT_MAIN): $(SRC_DIR)/app-cliente.c include/claves.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(OBJ_CLIENT1_MAIN): $(SRC_DIR)/app-cliente1.c include/claves.h | $(BUILD_DIR)
+$(OBJ_CLIENT1_MAIN): $(SRC_DIR)/app-cliente-1.c include/claves.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # ----------------------------

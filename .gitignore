@@ -1,1 +1,6 @@
 *.pdf
+build/
+cliente
+cliente1
+*.so
+servidor

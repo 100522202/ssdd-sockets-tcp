@@ -34,12 +34,12 @@ static int leer_configuracion_servidor(const char **ip_servidor,  uint16_t *puer
     const char *port_tuplas = getenv("PORT_TUPLAS");
 
     if (ip_tuplas == NULL) {
-        printf("ERROR: variable de entorno IP_TUPLAS no definida\n");
+        fprintf(stderr, "ERROR: variable de entorno IP_TUPLAS no definida\n");
         return -1;
     }
 
     if (port_tuplas == NULL) {
-        printf("ERROR: variable de entorno PORT_TUPLAS no definida\n");
+        fprintf(stderr, "ERROR: variable de entorno PORT_TUPLAS no definida\n");
         return -1;
     }
 
@@ -148,7 +148,6 @@ int exist(char *key) {
 
     // Validar fd
     if (socket_cliente_fd < 0){
-        perror("socket cliente");
         return -1;
     }
 
@@ -210,7 +209,6 @@ int set_value(char *key, char *value1, int N_value2, float *V_value2, struct Paq
 
     // Validar fd
     if (socket_cliente_fd < 0){
-        perror("socket cliente");
         return -1;
     }
 
@@ -338,7 +336,6 @@ int get_value(char *key, char *value1, int *N_value2, float *V_value2, struct Pa
 
     // Validar fd
     if (socket_cliente_fd < 0){
-        perror("socket cliente");
         return -1;
     }
 
@@ -451,7 +448,6 @@ int modify_value(char *key, char *value1, int N_value2, float *V_value2, struct 
 
     // Validar fd
     if (socket_cliente_fd < 0){
-        perror("socket cliente");
         return -1;
     }
 
@@ -570,7 +566,6 @@ int delete_key(char *key) {
 
     // Validar fd
     if (socket_cliente_fd < 0){
-        perror("socket cliente");
         return -1;
     }
 
@@ -627,7 +622,6 @@ int destroy() {
 
     // Validar fd
     if (socket_cliente_fd < 0){
-        perror("socket cliente");
         return -1;
     }
 

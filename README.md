@@ -4,18 +4,18 @@ Ejercicio Evaluable 2 de la asignatura **Sistemas Distribuidos (UC3M)**.
 
 ---
 
-## 📌 Descripción
+## Descripción
 
 Evolución del servicio clave-valor distribuido para operar sobre redes de comunicación utilizando **Sockets TCP en C**.
 
-### ⚙️ Características:
+### Características:
 * **Servidor TCP Multihilo:** Escucha en una IP y puerto configurables mediante variables de entorno (`IP_SERVIDOR`, `PUERTO_SERVIDOR`) y gestiona clientes en hilos separados.
 * **Control de Flujo y Fragmentación:** Rutinas auxiliares robustas de lectura (`read_all`) y escritura (`write_all`) para garantizar la recepción íntegra de paquetes sin problemas de fragmentación TCP.
 * **Serialización Binaria:** Empaquetado y desempaquetado de cadenas de texto y vectores de números reales de tamaño dinámico.
 
 ---
 
-## 🛠️ Compilación y Ejecución
+## Compilación y Ejecución
 
 ```bash
 make
